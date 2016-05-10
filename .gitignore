@@ -38,3 +38,6 @@ jspm_packages
 
 #Hide Token
 token.js
+
+#IDE
+.vscode/*
