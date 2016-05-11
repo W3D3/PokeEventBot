@@ -1,4 +1,5 @@
 var TelegramBot = require('node-telegram-bot-api');
+var request = require('request');
 
 var tokenGenerator = require('./token');
 var token = tokenGenerator.getToken();
@@ -13,6 +14,8 @@ var connection = mysql.createConnection({
 });
 
 connection.connect();
+var databaseOutput;
+var pokemon = [];
 
 // Setup bot
 var bot;
@@ -27,14 +30,11 @@ if (process.env.NODE_ENV === 'production') {
 };
 
 // Matches /current
-bot.onText(/\/current/, function(msg) {
-    var chatId = msg.chat.id;
-    var pokemon = [];
+bot.onText(/\/current/, function(currentMsg) {
+    var chatId = currentMsg.chat.id;
 
     var getCurrentEventsQuery = 'SELECT *, DATE_FORMAT(enddate,"%d %b %Y") as formateddate FROM pokemon_event AS pe INNER JOIN pokemon AS p INNER JOIN verteiler AS V ON pe.pokemon_id = p.id AND pe.verteiler_id = v.id WHERE pe.enddate >= CURDATE() ORDER BY enddate DESC;'
-        //   connection.query('SELECT * FROM pokemon_event AS pe INNER JOIN pokemon AS p INNER JOIN verteiler AS V ON pe.pokemon_id = p.id AND pe.verteiler_id = v.id WHERE pe.enddate >= CURDATE();', function(err, rows, fields) {
-        //     if (err) throw err;
-        // });'SELECT * FROM pokemon WHERE id in (SELECT `pokemon_id` FROM `pokemon_event` WHERE enddate >= CURDATE())'
+
 
     connection.query(getCurrentEventsQuery, function(err, rows, fields) {
         if (err) throw err;
@@ -43,6 +43,7 @@ bot.onText(/\/current/, function(msg) {
             pokemon[i] = "✳️ " + rows[i].name + " | bis " + rows[i].formateddate + " 📅";
         };
         console.log('Active Events: ', rows[0]);
+        databaseOutput = rows;
 
         console.log(pokemon);
         var opts = {
@@ -52,32 +53,32 @@ bot.onText(/\/current/, function(msg) {
                 one_time_keyboard: true,
             })
         };
-        console.log(opts);
-
-        //bot.sendMessage(chatId, 'Do you love me?');
-        var photo = 'assets/718.png';
-        //bot.sendPhoto(chatId, photo, opts);
         bot.sendMessage(chatId, 'Select an event to get more info.', opts);
 
-        bot.onText(/✳️ [a-zA-Z]+/, function(msg, match) {
-            var resp = match;
 
-            if (resp !== "") {
-                bot.sendMessage(chatId, "Details for: " + resp);
-            } else {
-                bot.sendMessage(chatId, "Please enter something!");
-            }
-        });
+
     });
 });
 
-//Any kind of message
-// bot.on('message', function(msg) {
-//     var chatId = msg.chat.id;
-//
-//     // photo can be: a file path, a stream or a Telegram file_id
-//     var photo = 'http://www.greenchu.de/sprites/icons/718.png';
-//     bot.sendPhoto(chatId, photo, {
-//         caption: 'Zitrone :D'
-//     });
-// });
+//Active Events Information
+bot.onText(/✳️ [a-zA-Z]+/, function(msg, match) {
+    var chatId = msg.chat.id;
+    var resp = match;
+    console.log(msg);
+
+    if (resp !== "") {
+        bot.sendMessage(chatId, "Details for: " + resp);
+
+        for (i = 0; i < pokemon.length; i++) {
+            if (pokemon[i] == msg.text) {
+                var picURL = 'http://pokeapi.co/media/sprites/pokemon/' + databaseOutput[i].pokemon_id + '.png';
+                var pic = request(picURL);
+                bot.sendPhoto(chatId, pic);
+                bot.sendMessage(chatId, "🌐 ID: " + databaseOutput[i].pokemon_id + "\n🐾 Name: " + databaseOutput[i].name + "\n🎚 Level: " + databaseOutput[i].level);
+            }
+        };
+
+    } else {
+        bot.sendMessage(chatId, "Please enter something!");
+    }
+});
