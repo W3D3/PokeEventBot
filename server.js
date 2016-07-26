@@ -7,11 +7,15 @@ var token = tokenGenerator.getToken();
 var mysql = require('mysql');
 var connection = mysql.createConnection({
     host: 'localhost',
-    port: '8889',
+    port: '3306',
     user: 'pokemonuser',
     password: tokenGenerator.getDatabasePassword(),
     database: 'pokemonevents'
 });
+
+// include and initialize the rollbar library with your access token
+var rollbar = require("rollbar");
+rollbar.init("51e000e3f40a42b59b85d24662e1d924");
 
 connection.connect();
 var databaseOutput;
@@ -25,17 +29,20 @@ var bot;
 if (process.env.NODE_ENV === 'production') {
     bot = new TelegramBot(token);
     bot.setWebHook(process.env.IP + bot.token, "");
+    rollbar.reportMessage("Running with Webhook");
 } else {
     bot = new TelegramBot(token, {
         polling: true
     });
 };
 
+rollbar.reportMessage("Running Bot");
+
 // Matches /current
 bot.onText(/\/current/, function(currentMsg) {
     var chatId = currentMsg.chat.id;
 
-    var getCurrentEventsQuery = 'SELECT *, DATE_FORMAT(startdate,"%d %b %Y") as fstartdate, DATE_FORMAT(enddate,"%d %b %Y") as fenddate FROM pokemon_event AS pe INNER JOIN pokemon AS p INNER JOIN verteiler AS V ON pe.pokemon_id = p.id AND pe.verteiler_id = v.id WHERE pe.enddate >= CURDATE() ORDER BY enddate ASC;'
+    var getCurrentEventsQuery = 'SELECT *, DATE_FORMAT(startdate,"%d %b %Y") as fstartdate, DATE_FORMAT(enddate,"%d %b %Y") as fenddate FROM pokemon_event AS pe INNER JOIN pokemon AS p INNER JOIN verteiler AS v ON pe.pokemon_id = p.id AND pe.verteiler_id = v.id WHERE pe.enddate >= CURDATE() ORDER BY enddate ASC;'
 
     connection.query(getCurrentEventsQuery, function(err, rows, fields) {
         if (err) throw err;
